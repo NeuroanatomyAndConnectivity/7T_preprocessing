@@ -7,7 +7,7 @@ import nipype.interfaces.nipy as nipy
 import nipype.algorithms.rapidart as ra
 from nipype.algorithms.misc import TSNR
 import nipype.interfaces.ants as ants
-from functions import strip_rois_func, get_info, median, motion_regressors, selectindex, fix_hdr
+from functions import strip_rois_func, get_info, median, motion_regressors, selectindex, fix_hdr, nilearn_denoise
 from linear_coreg import create_coreg_pipeline
 from nonlinear_coreg import create_nonlinear_pipeline
 
@@ -167,13 +167,13 @@ preproc.connect([(fillholes, brain, [('out_file', 'mask_file')]),
 
 
 # create wmcsf mask
-wmmask = Node(fs.Binarize(wm_ven_csf = True,
+wm_csf_mask = Node(fs.Binarize(wm_ven_csf = True,
                           erode = 2,
                           out_type = 'nii.gz',
                           binary_file='wmcsf_mask.nii.gz'), 
-               name='wmmask')
+               name='wm_csf_mask')
 
-preproc.connect([(fs_import, wmmask, [(('aparc_aseg', get_aparc_aseg), 'in_file')])
+preproc.connect([(fs_import, wm_csf_mask, [(('aparc_aseg', get_aparc_aseg), 'in_file')])
                  ])
 
 
@@ -262,7 +262,7 @@ preproc.connect([(coreg, translist_inv, [('outputnode.epi2lowres_lin_itk', 'in1'
 # merge images into list
 structlist = Node(util.Merge(2),name='structlist')
 preproc.connect([(fillholes, structlist, [('out_file', 'in1')]),
-                 (wmmask, structlist, [('binary_file', 'in2')])                 
+                 (wm_csf_mask, structlist, [('binary_file', 'in2')])                 
                  ])
    
 # project brain mask and wm/csf masks in functional space
@@ -296,15 +296,36 @@ preproc.connect([(slicemoco, artefact, [('out_file', 'realigned_files'),
                  ])
   
 # calculate motion regressors
-motreg = MapNode(util.Function(input_names=['motion_params', 'order','derivatives'],
+motreg = Node(util.Function(input_names=['motion_params', 'order','derivatives'],
                             output_names=['out_files'],
                             function=motion_regressors),
-                 iterfield=['order'],
                  name='motion_regressors')
-motreg.inputs.order=[1] #,2
+motreg.inputs.order=1
 motreg.inputs.derivatives=1
 preproc.connect([(slicemoco, motreg, [('par_file','motion_params')])])
   
+# use Nilearn to calculate physiological nuissance regressors and clean 
+# time series using combined regressors
+denoise = Node(util.Function(input_names=['in_file', 
+                                          'brain_mask', 'wm_csf_mask',
+                                          'motion_regressor', 
+                                          'outlier_regressor', 
+                                          'bandpass', 
+                                          'tr'],
+                             output_names=['denoised_file',
+                                           'confounds_file'],
+                             function=nilearn_denoise),
+               name='denoise')
+
+denoise.inputs.tr = 3.0
+denoise.inputs.bandpass = [0.1, 0.01]
+
+preproc.connect([(slicemoco, denoise, [('out_file', 'in_file')]),
+                 (struct2func, denoise, [(('output_image', selectindex, [0]), 'brain_mask'),
+                                         (('output_image', selectindex, [1]), 'wm_csf_mask')]),
+                 (motreg, denoise, [('out_files', 'motion_regressor')]),
+                 (artefact, denoise, [('outlier_files', 'outlier_regressor')])
+                 ])
 
   
 '''
@@ -342,7 +363,9 @@ preproc.connect([(head_convert, sink, [('out_file', 'struct.@anat_head')]),
                                   ('intensity_files', 'confounds.@intensity_files'),
                                   ('statistic_files', 'confounds.@outlier_stats'),
                                   ('plot_files', 'confounds.@outlier_plots')]),
-                 (motreg, sink, [('out_files', 'confounds.@motreg')])
+                 (motreg, sink, [('out_files', 'confounds.@motreg')]),
+                 (denoise, sink, [('denoised_file', '@final'),
+                                  ('counfounds_file', 'confounds.@all')])
                  ])
 
 
