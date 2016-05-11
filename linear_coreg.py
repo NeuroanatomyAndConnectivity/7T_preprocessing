@@ -77,7 +77,7 @@ def create_coreg_pipeline(name='coreg'):
     coreg.connect([(brain_convert, itk_epi, [('out_file', 'reference_file')]),
                    (inputnode, itk_epi, [('epi_median', 'source_file')]),
                    (bbregister_epi, itk_epi, [('out_fsl_file', 'transform_file')]),
-                   (itk_epi, outputnode, [('itk_transform', 'epi2lowres_itk')])
+                   (itk_epi, outputnode, [('itk_transform', 'epi2lowres_lin_itk')])
                    ])
     
     # transform epi to highres
