@@ -33,7 +33,7 @@ sessions=['session_1']# ,'session_2']
 scans=['rest_full_brain_1']#, 'rest_full_brain_2']
 
 # directories
-working_dir = '/scr/animals1/preproc7t/working_dir_test/' 
+working_dir = '/scr/animals1/preproc7t/working_dir_test/'
 data_dir= '/scr/animals1/preproc7t/data7t/'
 out_dir = '/scr/animals1/preproc7t/resting_test/preprocessed/'
 freesurfer_dir = '/scr/animals1/preproc7t/freesurfer/' 
@@ -76,8 +76,8 @@ scan_infosource.iterables=[('scan', scans)]
 # select files
 templates={'rest' : 'niftis/{subject}/{session}/{scan}.nii.gz',
            'dicom':'dicoms_example/MR.2.25.130666515827674933471189335089197862909.dcm',
-           'uni_lowres' : 'niftis/{subject}/{session}/MP2RAGE_UNI.nii.gz', # changed to lowres
-           't1_lowres' : 'niftis/{subject}/{session}/MP2RAGE_T1.nii.gz', # changed to lowres
+           'uni_highres' : 'niftis/{subject}/{session}/MP2RAGE_UNI.nii.gz', # changed to lowres
+           't1_highres' : 'niftis/{subject}/{session}/MP2RAGE_T1.nii.gz', # changed to lowres
            'brain_mask' : 'brainmasks/{subject}/ses-1/anat/*.nii.gz',
            }
 
@@ -103,41 +103,43 @@ fixhdr = Node(util.Function(input_names=['data_file', 'header_file'],
                             function=fix_hdr),
                   name='fixhdr')
 preproc.connect([(selectfiles, fixhdr, [('brain_mask', 'data_file'),
-                                               ('uni_lowres', 'header_file')]),
+                                        ('uni_highres', 'header_file')]),
                  ])
 
 # mask uni image with fixed brain mask
 mask_uni = Node(fsl.ApplyMask(),name='mask_uni')
 preproc.connect([(fixhdr, mask_uni, [('out_file', 'mask_file')]),
-                        (selectfiles, mask_uni,[('uni_lowres', 'in_file')])
-                        ])
+                 (selectfiles, mask_uni,[('uni_highres', 'in_file')])
+                ])
 
 # run reconall
-recon_all = Node(fs.ReconAll(args='-nuiterations 7 -no-isrunning'),
-                 name="recon_all")
-recon_all.plugin_args={'submit_specs': 'request_memory = 9000'}
-recon_all.inputs.subjects_dir=freesurfer_dir
+#recon_all = Node(fs.ReconAll(args='-nuiterations 7 -no-isrunning'),
+#                 name="recon_all")
+#recon_all.plugin_args={'submit_specs': 'request_memory = 9000'}
+#recon_all.inputs.subjects_dir=freesurfer_dir
 
 # function to replace / in subject id string with a _
 def sub_id(sub_id):
     return sub_id.replace('/','_')
 
-preproc.connect([(mask_uni, recon_all, [('out_file', 'T1_files')]),
-                  (subject_infosource, recon_all, [(('subject', sub_id), 'subject_id')])
-                  ])
+#preproc.connect([(mask_uni, recon_all, [('out_file', 'T1_files')]),
+#                  (subject_infosource, recon_all, [(('subject', sub_id), 'subject_id')])
+#                  ])
  
 # Grab brain and T1 file and segmentation from Freesurfer 
 # to store denoised T1, create more precise brainmask and wmcsfmask
 fs_import = Node(interface=nio.FreeSurferSource(),
                  name = 'fs_import')
 
-preproc.connect([(recon_all, fs_import, [('subject_id', 'subject_id'),
-                                       ('subjects_dir', 'subjects_dir')])
+preproc.connect([#(recon_all, fs_import, [('subject_id', 'subject_id'),
+                 #                      ('subjects_dir', 'subjects_dir')])
+                 (subject_infosource, fs_import, [(('subject', sub_id), 'subject_id')])
                  ])
+fs_import.inputs.subjects_dir=freesurfer_dir
 
 # convert Freesurfer T1 file to nifti
 head_convert=Node(fs.MRIConvert(out_type='niigz',
-                                 out_file='UNI.nii.gz'),
+                                 out_file='uni_lowres.nii.gz'),
                    name='head_convert')
 
 preproc.connect([(fs_import, head_convert, [('T1', 'in_file')])])
@@ -158,16 +160,9 @@ preproc.connect([(fs_import, brainmask, [(('aparc_aseg', get_aparc_aseg), 'in_fi
 
 # fill holes in mask
 fillholes = Node(fsl.maths.MathsCommand(args='-fillh -s 3 -thr 0.1 -bin',
-                                        out_file='UNI_brain_mask.nii.gz'),
+                                        out_file='uni_lowres_brain_mask.nii.gz'),
                  name='fillholes')
 preproc.connect([(brainmask, fillholes, [('binary_file', 'in_file')])])
-
-# resample brainmask to original T1 resolution
-resamp_brainmask = Node(afni.Resample(resample_mode='NN',
-                                      out_file='UNI_brain_mask_resamp.nii.gz'),
-                        name='resamp_brainmask')
-preproc.connect([(fillholes, resamp_brainmask, [('out_file', 'in_file')]),
-                 (selectfiles, resamp_brainmask, [('uni_lowres', 'master')])])
 
 # create wmcsf mask
 wm_csf_mask = Node(fs.Binarize(wm_ven_csf = True,
@@ -242,30 +237,33 @@ preproc.connect([(median, biasfield, [('median_file', 'input_image')])])
 coreg=create_coreg_pipeline()
 coreg.inputs.inputnode.fs_subjects_dir = freesurfer_dir
  
-preproc.connect([(selectfiles, coreg, [('uni_lowres', 'inputnode.uni_lowres')]),
-                (biasfield, coreg, [('output_image', 'inputnode.epi_median')]),
-                (subject_infosource, coreg, [('subject', 'inputnode.fs_subject_id')])
+preproc.connect([(selectfiles, coreg, [('uni_highres', 'inputnode.uni_highres')]),
+                 (head_convert, coreg, [('out_file', 'inputnode.uni_lowres')]),
+                 (biasfield, coreg, [('output_image', 'inputnode.epi_median')]),
+                 (subject_infosource, coreg, [('subject', 'inputnode.fs_subject_id')])
                 ])
 
 # perform nonlinear coregistration 
 nonreg=create_nonlinear_pipeline()
    
-preproc.connect([(selectfiles, nonreg, [('t1_lowres', 'inputnode.t1_lowres')]),
-                 (resamp_brainmask, nonreg, [('out_file', 'inputnode.brain_mask')]),
+preproc.connect([(selectfiles, nonreg, [('t1_highres', 'inputnode.t1_highres')]),
+                 (fillholes, nonreg, [('out_file', 'inputnode.brain_mask')]),
+                 (wm_csf_mask, nonreg, [('binary_file', 'inputnode.wmcsf_mask')]),
                  (fov, nonreg, [('out_file', 'inputnode.fov_mask')]),
-                 (coreg, nonreg, [('outputnode.epi2lowres_lin', 'inputnode.epi2lowres_lin'),
-                                  ('outputnode.epi2lowres_lin_itk', 'inputnode.epi2lowres_lin_itk')])
+                 (coreg, nonreg, [('outputnode.epi2highres_lin', 'inputnode.epi2highres_lin'),
+                                  ('outputnode.epi2highres_lin_itk', 'inputnode.epi2highres_lin_itk'),
+                                  ('outputnode.highres2lowres_itk', 'inputnode.highres2lowres_itk')])
                   ])
 
 # merge struct2func transforms into list
 translist_inv = Node(util.Merge(2),name='translist_inv')
-preproc.connect([(coreg, translist_inv, [('outputnode.epi2lowres_lin_itk', 'in1')]),
-                 (nonreg, translist_inv, [('outputnode.epi2lowres_invwarp', 'in2')])])
+preproc.connect([(coreg, translist_inv, [('outputnode.epi2highres_lin_itk', 'in1')]),
+                 (nonreg, translist_inv, [('outputnode.epi2highres_invwarp', 'in2')])])
    
 # merge images into list
 structlist = Node(util.Merge(2),name='structlist')
-preproc.connect([(fillholes, structlist, [('out_file', 'in1')]),
-                 (wm_csf_mask, structlist, [('binary_file', 'in2')])                 
+preproc.connect([(nonreg, structlist, [('outputnode.brainmask_highres', 'in1'),
+                                      ('outputnode.wmcsfmask_highres', 'in2')]),             
                  ])
    
 # project brain mask and wm/csf masks in functional space
@@ -342,24 +340,26 @@ sink = Node(nio.DataSink(parameterization=True),
 
 sink.inputs.base_directory = out_dir
 
-preproc.connect([(head_convert, sink, [('out_file', 'struct.@anat_head')]),
-                 (fillholes, sink, [('out_file', 'struct.@brain_mask')]),
-                 (resamp_brainmask, sink, [('out_file', 'struct.@brain_mask_resamp')]),
+preproc.connect([(head_convert, sink, [('out_file', 'registration.@anat_head')]),
+                 (fillholes, sink, [('out_file', 'registration.@brain_mask')]),
                  (remove_vol, sink, [('out_file', 'realignment.@raw_file')]),
                  (slicemoco, sink, [('out_file', 'realignment.@realigned_file'),
                                     ('par_file', 'confounds.@orig_motion')]),
                  (tsnr, sink, [('tsnr_file', 'realignment.@tsnr')]),
                  (median, sink, [('median_file', 'realignment.@median')]),
                  (biasfield, sink, [('output_image', 'realignment.@biasfield')]),
-                 (coreg, sink, [('outputnode.uni_lowres', 'registration.@uni_lowres'),
-                                ('outputnode.epi2lowres_lin_mat','registration.@epi2lowres_lin_mat'),
-                                ('outputnode.epi2lowres_lin_dat','registration.@epi2lowres_lin_dat'),
-                                ('outputnode.epi2lowres_lin', 'registration.@epi2lowres_lin'),
-                                ('outputnode.epi2lowres_lin_itk', 'registration.@epi2lowres_lin_itk'),
-                               ]),
-                (nonreg, sink, [('outputnode.epi2lowres_warp', 'registration.@epi2lowres_warp'),
-                                ('outputnode.epi2lowres_invwarp', 'registration.@epi2lowres_invwarp'),
-                                ('outputnode.epi2lowres_nonlin', 'registration.@epi2lowres_nonlin')]),
+                 (coreg, sink, [('outputnode.epi2lowres', 'registration.@epi2lowres'),
+                                ('outputnode.epi2lowres_mat','registration.@epi2lowres_mat'),
+                                ('outputnode.epi2lowres_dat','registration.@epi2lowres_dat'),
+                                ('outputnode.highres2lowres', 'registration.@highres2lowres'),
+                                ('outputnode.highres2lowres_dat', 'registration.@highres2lowres_dat'),
+                                ('outputnode.highres2lowres_mat', 'registration.@highres2lowres_mat'),
+                                ('outputnode.epi2highres_lin', 'registration.@epi2highres_lin'),
+                                ('outputnode.epi2highres_lin_itk', 'registration.@epi2highres_lin_itk'),
+                                ('outputnode.epi2highres_lin_mat', 'registration.@epi2highres_lin_mat')]),
+                (nonreg, sink, [('outputnode.epi2highres_warp', 'registration.@epi2highres_warp'),
+                                ('outputnode.epi2highres_invwarp', 'registration.@epi2highres_invwarp'),
+                                ('outputnode.epi2highres_nonlin', 'registration.@epi2highres_nonlin')]),
                 (struct2func, sink, [(('output_image', selectindex, [0,1]), 'mask.@masks')]),
                 (artefact, sink, [('norm_files', 'confounds.@norm_motion'),
                                   ('outlier_files', 'confounds.@outlier_files'),
@@ -378,4 +378,5 @@ Run workflow
 ------------
 '''
 
-preproc.run(plugin='MultiProc', plugin_args={'n_procs' : n_proc})
+preproc.run()
+#plugin='MultiProc', plugin_args={'n_procs' : n_proc})
