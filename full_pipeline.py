@@ -4,6 +4,7 @@ import nipype.interfaces.io as nio
 import nipype.interfaces.fsl as fsl
 import nipype.interfaces.freesurfer as fs
 import nipype.interfaces.nipy as nipy
+import nipype.interfaces.afni as afni
 import nipype.algorithms.rapidart as ra
 from nipype.algorithms.misc import TSNR
 import nipype.interfaces.ants as ants
@@ -11,6 +12,9 @@ from functions import strip_rois_func, get_info, median, motion_regressors, sele
 from linear_coreg import create_coreg_pipeline
 from nonlinear_coreg import create_nonlinear_pipeline
 
+
+# FREESURFER --version 5.3.0 FSL --version 5.0 AFNI C3D DCMSTACK XLRD MATHPLOTLIB SEABORN NUMPY SCIPY ANTSENV --version 2.1.0-rc3
+# source ~/nipype_env/bin/activate
 
 '''
 ------
@@ -31,7 +35,7 @@ scans=['rest_full_brain_1']#, 'rest_full_brain_2']
 # directories
 working_dir = '/scr/animals1/preproc7t/working_dir_test/'
 data_dir= '/scr/animals1/preproc7t/data7t/'
-out_dir = '/scr/animals1/preproc7t/resting/preprocessed/'
+out_dir = '/scr/animals1/preproc7t/resting_test/preprocessed/'
 freesurfer_dir = '/scr/animals1/preproc7t/freesurfer/' 
 
 # set fsl output type to nii.gz
