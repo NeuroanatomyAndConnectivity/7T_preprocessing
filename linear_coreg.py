@@ -19,24 +19,27 @@ def create_coreg_pipeline(name='coreg'):
     inputnode=Node(util.IdentityInterface(fields=['epi_median',
                                                   'fs_subjects_dir',
                                                   'fs_subject_id',
-                                                  'uni_lowres',
+                                                  'uni_highres',
+                                                  'uni_lowres', 
                                                   ]),
                    name='inputnode')
     
     # outputnode                                     
-    outputnode=Node(util.IdentityInterface(fields=['uni_lowres',
-                                                   'epi2lowres_lin',
-                                                   'epi2lowres_lin_mat',
-                                                   'epi2lowres_lin_dat',
-                                                   'epi2lowres_lin_itk',
+    outputnode=Node(util.IdentityInterface(fields=['epi2lowres',
+                                                   'epi2lowres_mat',
+                                                   'epi2lowres_dat',
+                                                   'highres2lowres',
+                                                   'highres2lowres_mat',
+                                                   'highres2lowres_dat',
+                                                   'highres2lowres_itk',
+                                                   'epi2highres_lin',
+                                                   'epi2highres_lin_mat',
+                                                   'epi2highres_lin_itk',
                                                    ]),
                     name='outputnode')
     
     
-    
-    
-    
-    # linear registration epi median to lowres mp2rage with bbregister
+    # linear registration epi median to lowres mp2rage (downsampled from freesurfer) with bbregister
     bbregister_epi = Node(fs.BBRegister(contrast_type='t2',
                                     out_fsl_file='epi2lowres.mat',
                                     out_reg_file='epi2lowres.dat',
@@ -55,30 +58,71 @@ def create_coreg_pipeline(name='coreg'):
                                              ])
                    ])
     
-    
-    # convert transform to itk
-    itk_epi = Node(interface=c3.C3dAffineTool(fsl2ras=True,
-                                           itk_transform='epi2lowres.txt'), 
-                                           name='itk')
-     
-    coreg.connect([(inputnode, itk_epi, [('epi_median', 'source_file'),
-                                         ('uni_lowres', 'reference_file')]),
-                   (bbregister_epi, itk_epi, [('out_fsl_file', 'transform_file')]),
-                   (itk_epi, outputnode, [('itk_transform', 'epi2lowres_lin_itk')])
+
+    # linear register original highres mp2rage to lowres mp2rage
+    bbregister_anat = Node(fs.BBRegister(contrast_type='t1',
+                                    out_fsl_file='highres2lowres.mat',
+                                    out_reg_file='highres2lowres.dat',
+                                    registered_file='highres2lowres.nii.gz',
+                                    init='fsl'
+                                    ),
+                    name='bbregister_anat')
+
+    coreg.connect([(inputnode, bbregister_anat, [('fs_subjects_dir', 'subjects_dir'),
+                                                ('fs_subject_id', 'subject_id'),
+                                                ('uni_highres', 'source_file')]),
+                   (bbregister_anat, outputnode, [('out_fsl_file', 'highres2lowres_mat'),
+                                             ('out_reg_file', 'highres2lowres_dat'),
+                                             ('registered_file', 'highres2lowres')
+                                             ])
                    ])
     
-    # transform epi to highres
-    epi2lowres = Node(ants.ApplyTransforms(dimension=3,
-                                            output_image='epi2lowres_lin.nii.gz',
-                                            interpolation = 'BSpline',
-                                            #invert_transform_flags=[True, False]
-                                            ),
-                       name='epi2lowres')
+    # convert highres2lowres transform to itk
+    itk_anat = Node(interface=c3.C3dAffineTool(fsl2ras=True,
+                                          itk_transform='highres2lowres.txt'), 
+                     name='itk_anat')
+     
+    coreg.connect([(inputnode, itk_anat, [('uni_highres', 'source_file'), 
+                                          ('uni_lowres', 'reference_file')]),
+                   (bbregister_anat, itk_anat, [('out_fsl_file', 'transform_file')]),
+                   (itk_anat, outputnode, [('itk_transform', 'highres2lowres_itk')])
+                   ])
     
-    coreg.connect([(inputnode, epi2lowres, [('uni_lowres', 'reference_image'),
-                                             ('epi_median', 'input_image')]),
-                   (itk_epi, epi2lowres, [('itk_transform', 'transforms')]),
-                   (epi2lowres, outputnode, [('output_image', 'epi2lowres_lin')])])
+    
+    # invert highres2lowres transform
+    invert = Node(fsl.ConvertXFM(invert_xfm=True),
+                  name='invert')
+    coreg.connect([(bbregister_anat, invert, [('out_fsl_file', 'in_file')])])
+    
+    # concatenate epi2highres transforms
+    concat = Node(fsl.ConvertXFM(concat_xfm=True,
+                                 out_file='epi2highres_lin.mat'),
+                  name='concat')
+    coreg.connect([(bbregister_epi, concat, [('out_fsl_file', 'in_file')]),
+                   (invert, concat, [('out_file', 'in_file2')]),
+                   (concat, outputnode, [('out_file', 'epi2higres_lin_mat')])])
 
+    # convert epi2highres transform into itk format
+    itk = Node(interface=c3.C3dAffineTool(fsl2ras=True,
+                                          itk_transform='epi2highres_lin.txt'), 
+                     name='itk')
+    
+    coreg.connect([(inputnode, itk, [('epi_median', 'source_file'),
+                                     ('uni_highres', 'reference_file')]),
+                   (concat, itk, [('out_file', 'transform_file')]),
+                   (itk, outputnode, [('itk_transform', 'epi2highres_lin_itk')])
+                   ])
+
+    # transform epi to highres
+    epi2highres = Node(ants.ApplyTransforms(dimension=3,
+                                            output_image='epi2highres_lin.nii.gz',
+                                            interpolation = 'BSpline',
+                                            ),
+                       name='epi2highres')
+    
+    coreg.connect([(inputnode, epi2highres, [('uni_highres', 'reference_image'),
+                                             ('epi_median', 'input_image')]),
+                   (itk, epi2highres, [('itk_transform', 'transforms')]),
+                   (epi2highres, outputnode, [('output_image', 'epi2highres_lin')])])
 
     return coreg
