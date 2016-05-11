@@ -34,19 +34,6 @@ def create_coreg_pipeline(name='coreg'):
     
     
     
-    # convert mgz head file for reference
-    fs_import = Node(interface=nio.FreeSurferSource(),
-                     name = 'fs_import')
-    
-    brain_convert=Node(fs.MRIConvert(out_type='niigz', 
-                                     out_file='uni_lowres.nii.gz'),
-                       name='brain_convert')
-    
-    coreg.connect([(inputnode, fs_import, [('fs_subjects_dir','subjects_dir'),
-                                            ('fs_subject_id', 'subject_id')]),
-                   (fs_import, brain_convert, [('brain', 'in_file')]),
-                   (brain_convert, outputnode, [('out_file', 'uni_lowres')])
-                   ])
     
     
     # linear registration epi median to lowres mp2rage with bbregister
@@ -74,8 +61,8 @@ def create_coreg_pipeline(name='coreg'):
                                            itk_transform='epi2lowres.txt'), 
                                            name='itk')
      
-    coreg.connect([(brain_convert, itk_epi, [('out_file', 'reference_file')]),
-                   (inputnode, itk_epi, [('epi_median', 'source_file')]),
+    coreg.connect([(inputnode, itk_epi, [('epi_median', 'source_file'),
+                                         ('uni_lowres', 'reference_file')]),
                    (bbregister_epi, itk_epi, [('out_fsl_file', 'transform_file')]),
                    (itk_epi, outputnode, [('itk_transform', 'epi2lowres_lin_itk')])
                    ])
