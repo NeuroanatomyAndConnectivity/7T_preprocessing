@@ -365,7 +365,7 @@ preproc.connect([(head_convert, sink, [('out_file', 'struct.@anat_head')]),
                                   ('plot_files', 'confounds.@outlier_plots')]),
                  (motreg, sink, [('out_files', 'confounds.@motreg')]),
                  (denoise, sink, [('denoised_file', '@final'),
-                                  ('counfounds_file', 'confounds.@all')])
+                                  ('confounds_file', 'confounds.@all')])
                  ])
 
 
