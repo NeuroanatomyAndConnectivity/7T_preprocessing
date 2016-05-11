@@ -157,14 +157,13 @@ fillholes = Node(fsl.maths.MathsCommand(args='-fillh -s 3 -thr 0.1 -bin',
                                         out_file='UNI_brain_mask.nii.gz'),
                  name='fillholes')
 preproc.connect([(brainmask, fillholes, [('binary_file', 'in_file')])])
-    
-# mask T1 with the mask
-brain = Node(fsl.ApplyMask(out_file='UNI_brain.nii.gz'),
-             name='brain')
 
-preproc.connect([(fillholes, brain, [('out_file', 'mask_file')]),
-                        (head_convert, brain, [('out_file', 'in_file')])])
-
+# resample brainmask to original T1 resolution
+resamp_brainmask = Node(afni.Resample(resample_mode='NN',
+                                      out_file='UNI_brain_mask_resamp.nii.gz'),
+                        name='resamp_brainmask')
+preproc.connect([(fillholes, resamp_brainmask, [('out_file', 'in_file')]),
+                 (selectfiles, resamp_brainmask, [('uni_lowres', 'master')])])
 
 # create wmcsf mask
 wm_csf_mask = Node(fs.Binarize(wm_ven_csf = True,
@@ -248,7 +247,7 @@ preproc.connect([(selectfiles, coreg, [('uni_lowres', 'inputnode.uni_lowres')]),
 nonreg=create_nonlinear_pipeline()
    
 preproc.connect([(selectfiles, nonreg, [('t1_lowres', 'inputnode.t1_lowres')]),
-                 (fillholes, nonreg, [('out_file', 'inputnode.brain_mask')]),
+                 (resamp_brainmask, nonreg, [('out_file', 'inputnode.brain_mask')]),
                  (fov, nonreg, [('out_file', 'inputnode.fov_mask')]),
                  (coreg, nonreg, [('outputnode.epi2lowres_lin', 'inputnode.epi2lowres_lin'),
                                   ('outputnode.epi2lowres_lin_itk', 'inputnode.epi2lowres_lin_itk')])
@@ -341,7 +340,7 @@ sink.inputs.base_directory = out_dir
 
 preproc.connect([(head_convert, sink, [('out_file', 'struct.@anat_head')]),
                  (fillholes, sink, [('out_file', 'struct.@brain_mask')]),
-                 (brain, sink, [('out_file', 'struct.@anat_brain')]),
+                 (resamp_brainmask, sink, [('out_file', 'struct.@brain_mask_resamp')]),
                  (remove_vol, sink, [('out_file', 'realignment.@raw_file')]),
                  (slicemoco, sink, [('out_file', 'realignment.@realigned_file'),
                                     ('par_file', 'confounds.@orig_motion')]),
