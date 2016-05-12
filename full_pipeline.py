@@ -34,14 +34,14 @@ subjects=['sub001'] #, 'sub002', 'sub003', 'sub004', 'sub005', 'sub006',
           # 'sub013', 'sub014', 'sub015', 'sub016', 'sub017', 'sub018', 
           # 'sub019', 'sub020', 'sub021', 'sub022']
 # sessions to loop over
-sessions=['session_1']# ,'session_2']
+sessions=['session_1' ,'session_2']
 # scans to loop over
-scans=['rest_full_brain_1']#, 'rest_full_brain_2']
+scans=['rest_full_brain_1', 'rest_full_brain_2']
 
 # directories
 working_dir = '/scr/animals1/preproc7t/working_dir_test/'
 data_dir= '/scr/animals1/preproc7t/data7t/'
-out_dir = '/scr/animals1/preproc7t/resting_test/preprocessed/'
+out_dir = '/scr/animals1/preproc7t/resting/preprocessed/'
 freesurfer_dir = '/scr/animals1/preproc7t/freesurfer/' 
 
 # set fsl output type to nii.gz
@@ -384,5 +384,6 @@ Run workflow
 ------------
 '''
 
-preproc.run()
+#preproc.run()
 #plugin='MultiProc', plugin_args={'n_procs' : n_proc})
+preproc.run(plugin='CondorDAGMan', plugin_args = {'override_specs': 'request_memory = 20000'})
