@@ -124,13 +124,15 @@ def nilearn_denoise(in_file, brain_mask, wm_csf_mask,
     CompCor regressors and NiftiMasker for regression of all nuissance regressors,
     detrending, normalziation and bandpass filtering.
     """
+    import numpy as np
     import nibabel as nb
+    import os
     from nilearn.image import high_variance_confounds
     from nilearn.input_data import NiftiMasker
     from nipype.utils.filemanip import split_filename
 
     # reload niftis to round affines so that nilearn doesn't complain
-    wmcsf_nii=nb.Nifti1Image(nb.load(wm_csf_mask).get_data(), np.around(nb.load(wm_csf_mask).get_affine(), 2), nb.load(wm_csf_mask).get_header())
+    wm_csf_nii=nb.Nifti1Image(nb.load(wm_csf_mask).get_data(), np.around(nb.load(wm_csf_mask).get_affine(), 2), nb.load(wm_csf_mask).get_header())
     time_nii=nb.Nifti1Image(nb.load(in_file).get_data(),np.around(nb.load(in_file).get_affine(), 2), nb.load(in_file).get_header())
         
     # infer shape of confound array
@@ -172,4 +174,4 @@ def nilearn_denoise(in_file, brain_mask, wm_csf_mask,
     confound_fname = os.path.join(os.getcwd(), "all_confounds.txt")
     np.savetxt(confound_fname, confounds, fmt="%.10f")
     
-    return os.path.abspath(img_fname, confound_fname)
+    return os.path.abspath(img_fname), confound_fname
