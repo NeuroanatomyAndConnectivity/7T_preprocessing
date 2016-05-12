@@ -11,6 +11,7 @@ import nipype.interfaces.ants as ants
 from functions import strip_rois_func, get_info, median, motion_regressors, selectindex, fix_hdr, nilearn_denoise
 from linear_coreg import create_coreg_pipeline
 from nonlinear_coreg import create_nonlinear_pipeline
+import os
 
 
 # FREESURFER 
@@ -341,12 +342,27 @@ Outputs
 -------
 '''  
 
+
+def make_basedir(out_dir, subject, session, scan):
+    return out_dir+sub+'/'+sess+'/'+scan+'/'
+
+makebase = Node(util.Function(input_names=['out_dir','subject',
+                                           'session', 'scan'],
+                             output_names=['base_dir'],
+                             function=make_basedir),
+               name='makebase')
+    
+preproc.connect([(subject_infosource, makebase, [('subject', 'subject')]),
+                 (session_infosource, makebase, [('session', 'session')]),
+                 (scan_infosource, makebase, [('scan', 'scan')])
+                 ])
+    
+    
 sink = Node(nio.DataSink(parameterization=True),
              name='sink')
 
-sink.inputs.base_directory = out_dir
-
-preproc.connect([(head_convert, sink, [('out_file', 'registration.@anat_head')]),
+preproc.connect([(makebase, sink, [('base_dir', 'base_directory')]),
+                 (head_convert, sink, [('out_file', 'registration.@anat_head')]),
                  (fillholes, sink, [('out_file', 'registration.@brain_mask')]),
                  (remove_vol, sink, [('out_file', 'realignment.@raw_file')]),
                  (slicemoco, sink, [('out_file', 'realignment.@realigned_file'),
