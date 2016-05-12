@@ -11,7 +11,6 @@ import nipype.interfaces.ants as ants
 from functions import strip_rois_func, get_info, median, motion_regressors, selectindex, fix_hdr, nilearn_denoise
 from linear_coreg import create_coreg_pipeline
 from nonlinear_coreg import create_nonlinear_pipeline
-import os
 
 
 # FREESURFER 
