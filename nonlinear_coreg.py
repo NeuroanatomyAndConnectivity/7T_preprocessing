@@ -119,7 +119,7 @@ def create_nonlinear_pipeline(name='nonlinear'):
                                                            output_warped_image = True,
                                                            interpolation = 'BSpline'),
                       name = 'antsreg')
-    #antsreg.plugin_args={'override_specs': 'requirements = Machine == "kaiser.cbs.mpg.de"'}
+    antsreg.plugin_args={'override_specs': 'request_memory = 40000'}
        
     nonlinear.connect([(mask_epi, antsreg, [('out_file', 'moving_image')]),
                        (mask_t1_2, antsreg, [('out_file', 'fixed_image')]),
