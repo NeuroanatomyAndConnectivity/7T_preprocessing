@@ -13,8 +13,14 @@ from linear_coreg import create_coreg_pipeline
 from nonlinear_coreg import create_nonlinear_pipeline
 
 
-# FREESURFER --version 5.3.0 FSL --version 5.0 AFNI C3D DCMSTACK XLRD MATHPLOTLIB SEABORN NUMPY SCIPY ANTSENV --version 2.1.0-rc3
-# source ~/nipype_env/bin/activate
+# FREESURFER 
+# FSL 
+# AFNI 
+# ANTSENV
+# C3D 
+# DCMSTACK
+# NILEARN
+# source /scr/animals1/nipype_env/bin/activate
 
 '''
 ------
@@ -309,8 +315,8 @@ preproc.connect([(slicemoco, motreg, [('par_file','motion_params')])])
 # time series using combined regressors
 denoise = Node(util.Function(input_names=['in_file', 
                                           'brain_mask', 'wm_csf_mask',
-                                          'motion_regressor', 
-                                          'outlier_regressor', 
+                                          'motreg_file', 
+                                          'outlier_file', 
                                           'bandpass', 
                                           'tr'],
                              output_names=['denoised_file',
@@ -324,8 +330,8 @@ denoise.inputs.bandpass = [0.1, 0.01]
 preproc.connect([(slicemoco, denoise, [('out_file', 'in_file')]),
                  (struct2func, denoise, [(('output_image', selectindex, [0]), 'brain_mask'),
                                          (('output_image', selectindex, [1]), 'wm_csf_mask')]),
-                 (motreg, denoise, [('out_files', 'motion_regressor')]),
-                 (artefact, denoise, [('outlier_files', 'outlier_regressor')])
+                 (motreg, denoise, [(('out_files',selectindex,[0]), 'motreg_file')]),
+                 (artefact, denoise, [('outlier_files', 'outlier_file')])
                  ])
 
   
@@ -367,7 +373,7 @@ preproc.connect([(head_convert, sink, [('out_file', 'registration.@anat_head')])
                                   ('statistic_files', 'confounds.@outlier_stats'),
                                   ('plot_files', 'confounds.@outlier_plots')]),
                  (motreg, sink, [('out_files', 'confounds.@motreg')]),
-                 (denoise, sink, [('denoised_file', '@final'),
+                 (denoise, sink, [('denoised_file', 'final.@final'),
                                   ('confounds_file', 'confounds.@all')])
                  ])
 
