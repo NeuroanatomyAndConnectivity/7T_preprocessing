@@ -34,14 +34,14 @@ subjects=['sub001'] #, 'sub002', 'sub003', 'sub004', 'sub005', 'sub006',
           # 'sub013', 'sub014', 'sub015', 'sub016', 'sub017', 'sub018', 
           # 'sub019', 'sub020', 'sub021', 'sub022']
 # sessions to loop over
-sessions=['session_1' ,'session_2']
+sessions=['session_1']# ,'session_2']
 # scans to loop over
-scans=['rest_full_brain_1', 'rest_full_brain_2']
+scans=['rest_full_brain_1']#, 'rest_full_brain_2']
 
 # directories
 working_dir = '/scr/animals1/preproc7t/working_dir_test/'
 data_dir= '/scr/animals1/preproc7t/data7t/'
-out_dir = '/scr/animals1/preproc7t/resting/preprocessed/'
+out_dir = '/scr/animals1/preproc7t/resting_test/preprocessed/'
 freesurfer_dir = '/scr/animals1/preproc7t/freesurfer/' 
 
 # set fsl output type to nii.gz
@@ -102,6 +102,7 @@ preproc.connect([(subject_infosource, selectfiles, [('subject', 'subject')]),
 Structural Preprocessing
 ------------------------
 '''
+
 
 # fix header of supplied brain mask
 fixhdr = Node(util.Function(input_names=['data_file', 'header_file'],
@@ -343,27 +344,31 @@ Outputs
 
 
 def make_basedir(out_dir, subject, session, scan):
-    return out_dir+sub+'/'+sess+'/'+scan+'/'
-
+    return out_dir+subject+'/'+session+'/'+scan+'/'
+  
 makebase = Node(util.Function(input_names=['out_dir','subject',
                                            'session', 'scan'],
                              output_names=['base_dir'],
                              function=make_basedir),
                name='makebase')
-    
+makebase.inputs.out_dir = out_dir
+
 preproc.connect([(subject_infosource, makebase, [('subject', 'subject')]),
                  (session_infosource, makebase, [('session', 'session')]),
                  (scan_infosource, makebase, [('scan', 'scan')])
                  ])
+
     
-    
-sink = Node(nio.DataSink(parameterization=True),
+sink = Node(nio.DataSink(parameterization=False),
              name='sink')
+
+sink.inputs.substitutions = [('transform0Warp', 'epi2highres_warp'),
+                              ('transform0InverseWarp', 'epi2highres_invwarp'),
+                              ('transform_Warped', 'epi2highres_nonlin')]
 
 preproc.connect([(makebase, sink, [('base_dir', 'base_directory')]),
                  (head_convert, sink, [('out_file', 'registration.@anat_head')]),
                  (fillholes, sink, [('out_file', 'registration.@brain_mask')]),
-                 (remove_vol, sink, [('out_file', 'realignment.@raw_file')]),
                  (slicemoco, sink, [('out_file', 'realignment.@realigned_file'),
                                     ('par_file', 'confounds.@orig_motion')]),
                  (tsnr, sink, [('tsnr_file', 'realignment.@tsnr')]),
@@ -380,7 +385,8 @@ preproc.connect([(makebase, sink, [('base_dir', 'base_directory')]),
                                 ('outputnode.epi2highres_lin_mat', 'registration.@epi2highres_lin_mat')]),
                 (nonreg, sink, [('outputnode.epi2highres_warp', 'registration.@epi2highres_warp'),
                                 ('outputnode.epi2highres_invwarp', 'registration.@epi2highres_invwarp'),
-                                ('outputnode.epi2highres_nonlin', 'registration.@epi2highres_nonlin')]),
+                                ('outputnode.epi2highres_nonlin', 'registration.@epi2highres_nonlin'),
+                                ('outputnode.brainmask_highres', 'registration.@highres_brainmask')]),
                 (struct2func, sink, [(('output_image', selectindex, [0,1]), 'mask.@masks')]),
                 (artefact, sink, [('norm_files', 'confounds.@norm_motion'),
                                   ('outlier_files', 'confounds.@outlier_files'),
