@@ -162,7 +162,7 @@ def nilearn_denoise(in_file, brain_mask, wm_csf_mask,
     denoiser=NiftiMasker(mask_img=brain_mask, standardize=True, detrend=True, high_pass=bandpass[1], low_pass=bandpass[0], t_r=tr)
     
     # denoise and return denoise data to img
-    confounds=np.hstack((outlier_regressor,wm_csf_regressor))
+    confounds=np.hstack((outlier_regressor,wm_csf_regressor, motion_regressor))
     denoised_data=denoiser.fit_transform(in_file, confounds=confounds)
     denoised_img=denoiser.inverse_transform(denoised_data)
         
